@@ -1,0 +1,286 @@
+---FILE: README.md
+# Simple Task Manager API
+
+**Description:**
+
+This project provides a simple RESTful API for managing tasks. It includes a backend API built with FastAPI and a basic frontend for creating, reading, updating, and deleting tasks.  It's designed to be a minimal, functional example of a full-stack web service.
+
+**Why it's useful:**
+
+This project demonstrates a basic workflow for building a web service, including API design, data storage, and a simple user interface. It's a good starting point for learning about REST APIs, database interaction, and frontend development.
+
+**Installation & Setup:**
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/your-username/simple-task-manager.git
+    cd simple-task-manager
+    ```
+
+2.  **Set up the backend:**
+    *   Create a `.env` file in the root directory and populate it with the following (replace with your actual values):
+        ```
+        DATABASE_URL=sqlite:///tasks.db
+        ```
+    *   Run the backend server:
+        ```bash
+        uvicorn app:app --reload
+        ```
+
+3.  **Set up the frontend:**
+    *   Navigate to the `frontend` directory:
+        ```bash
+        cd frontend
+        ```
+    *   Run the frontend development server:
+        ```bash
+        npm start
+        ```
+        or
+        ```bash
+        python -m http.server 8000
+        ```
+
+4.  **Access the frontend:** Open your web browser and go to `http://localhost:8000`.
+
+**API Endpoints:**
+
+*   `GET /tasks`: Retrieves all tasks.
+*   `POST /tasks`: Creates a new task.  Request body should be a JSON object with `title` and `description` fields.
+*   `GET /tasks/{id}`: Retrieves a specific task by ID.
+*   `PUT /tasks/{id}`: Updates a specific task by ID. Request body should be a JSON object with `title` and/or `description` fields.
+*   `DELETE /tasks/{id}`: Deletes a specific task by ID.
+
+**Example Usage:**
+
+*   **Create a task:**
+    `POST /tasks`
+    Request Body:
+    ```json
+    {
+      "title": "Grocery Shopping",
+      "description": "Buy milk, eggs, and bread"
+    }
+    ```
+    Response:
+    ```json
+    {
+      "id": 1,
+      "title": "Grocery Shopping",
+      "description": "Buy milk, eggs, and bread"
+    }
+    ```
+
+*   **Get all tasks:**
+    `GET /tasks`
+    Response:
+    ```json
+    [
+      {
+        "id": 1,
+        "title": "Grocery Shopping",
+        "description": "Buy milk, eggs, and bread"
+      }
+    ]
+    ```
+
+**Dependencies:**
+
+*   FastAPI
+*   uvicorn
+*   SQLAlchemy
+*   Pydantic
+*   frontend dependencies (listed in `package.json`)
+
+**License:**
+
+MIT License
+
+---FILE: app.py
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List
+import sqlite3
+
+DATABASE_URL = "sqlite:///tasks.db"
+
+app = FastAPI()
+
+# Database models
+class Task(BaseModel):
+    id: int
+    title: str
+    description: str
+
+# Database connection
+def get_db():
+    db = sqlite3.connect(DATABASE_URL)
+    db.row_factory = sqlite3.Row
+    return db
+
+# API endpoints
+@app.get("/tasks", response_model=List[Task])
+async def read_tasks():
+    db = get_db()
+    tasks = db.execute("SELECT * FROM tasks").fetchall()
+    return [Task(**row) for row in tasks]
+
+@app.post("/tasks", response_model=Task)
+async def create_task(task: Task):
+    db = get_db()
+    db.execute("INSERT INTO tasks (title, description) VALUES (?, ?)", (task.title, task.description))
+    db.commit()
+    task_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    return Task(id=task_id, title=task.title, description=task.description)
+
+@app.get("/tasks/{id}", response_model=Task)
+async def read_task(id: int):
+    db = get_db()
+    task = db.execute("SELECT * FROM tasks WHERE id = ?", (id,)).fetchone()
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return Task(**task)
+
+@app.put("/tasks/{id}", response_model=Task)
+async def update_task(id: int, task: Task):
+    db = get_db()
+    db.execute("UPDATE tasks SET title = ?, description = ? WHERE id = ?", (task.title, task.description, id))
+    db.commit()
+    updated_task = db.execute("SELECT * FROM tasks WHERE id = ?", (id,)).fetchone()
+    return Task(**updated_task)
+
+@app.delete("/tasks/{id}")
+async def delete_task(id: int):
+    db = get_db()
+    db.execute("DELETE FROM tasks WHERE id = ?", (id,))
+    db.commit()
+    return {"message": "Task deleted"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+---FILE: frontend/index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Task Manager</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>Simple Task Manager</h1>
+
+    <button id="newTaskButton">Create New Task</button>
+
+    <div id="task-list">
+        <!-- Tasks will be displayed here -->
+    </div>
+
+    <script src="scripts.js"></script>
+</body>
+</html>
+---FILE: frontend/scripts.js
+document.addEventListener('DOMContentLoaded', function() {
+    const newTaskButton = document.getElementById('newTaskButton');
+    const taskList = document.getElementById('task-list');
+
+    // Fetch tasks from the backend
+    fetch('/tasks')
+        .then(response => response.json())
+        .then(tasks => {
+            taskList.innerHTML = ''; // Clear existing tasks
+            tasks.forEach(task => {
+                const taskElement = document.createElement('div');
+                taskElement.textContent = `${task.title} - ${task.description}`;
+                taskList.appendChild(taskElement);
+            });
+        })
+        .catch(error => console.error('Error fetching tasks:', error));
+
+    // Create new task
+    newTaskButton.addEventListener('click', () => {
+        // Implement task creation logic here (e.g., using fetch to send data to the backend)
+        alert('Create new task functionality is not implemented yet.');
+    });
+});
+---FILE: frontend/styles.css
+body {
+    font-family: sans-serif;
+    margin: 20px;
+}
+
+h1 {
+    text-align: center;
+}
+
+#task-list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+}
+
+.task {
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin: 5px;
+    width: 200px;
+}
+---FILE: requirements.txt
+fastapi
+uvicorn
+pydantic
+SQLAlchemy
+--FILE: .gitignore
+node_modules
+__pycache__
+.env
+.env.example
+---FILE: .env.example
+DATABASE_URL=sqlite:///tasks.db
+---FILE: config.py
+# This file is not strictly required, but demonstrates a configuration approach.
+# In a real application, you'd likely use a more robust configuration management system.
+
+import os
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///tasks.db") # Default to SQLite if not set
+
+# You could add other configuration settings here, such as API keys, etc.
+---FILE: database/create_tables.sql
+CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT
+);
+---FILE: tests/test_app.py
+import pytest
+from fastapi.test import TestClient
+from app import app
+
+@pytest.fixture
+def test_client():
+    client = TestClient(app)
+    return client
+
+def test_read_tasks():
+    response = test_client.get("/tasks")
+    assert response.status_code == 200
+    assert response.json() == []  # Expect an empty list initially
+
+def test_create_task():
+    response = test_client.post("/tasks", json={"title": "Test Task", "description": "Test Description"})
+    assert response.status_code == 201
+    assert response.json()["title"] == "Test Task"
+    assert response.json()["description"] == "Test Description"
+
+def test_read_task():
+    # Create a task first
+    response = test_client.post("/tasks", json={"title": "Existing Task", "description": "Existing Description"})
+    task_id = response.json()["id"]
+
+    response = test_client.get(f"/tasks/{task_id}")
+    assert response.status_code == 200
+    assert response.json()["id"] == task_id
+    assert response.json()["title"] == "Existing Task"
+    assert respon
